@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export function ConversationsPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [conversationMessages, setConversationMessages] = useState<Message[]>([]);
+  const hasInitiallyFetched = useRef(false);
 
   useEffect(() => {
     // Auto-connect with API key from environment
@@ -47,8 +48,10 @@ export function ConversationsPage() {
   }, [isConnected, connect]);
 
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !hasInitiallyFetched.current) {
+      hasInitiallyFetched.current = true;
       getConversations();
+      
       // Refresh conversations every 30 seconds
       const interval = setInterval(() => {
         getConversations();

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import type { JSX, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './useAuth';
@@ -198,7 +198,7 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
     }
   };
 
-  const sendMessage = (data: {
+  const sendMessage = useCallback((data: {
     recipient_id: string;
     recipient_name: string;
     sender_name: string;
@@ -215,43 +215,43 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       ...data,
       content_type: data.content_type || 'text',
     });
-  };
+  }, [socket]);
 
-  const getMessages = (recipient_id: string, limit: number = 50): void => {
+  const getMessages = useCallback((recipient_id: string, limit: number = 50): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
     socket.emit('get_messages', { recipient_id, limit });
-  };
+  }, [socket]);
 
-  const getConversations = (): void => {
+  const getConversations = useCallback((): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
     socket.emit('get_conversations');
-  };
+  }, [socket]);
 
-  const getOnlineUsers = (): void => {
+  const getOnlineUsers = useCallback((): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
     socket.emit('get_online_users');
-  };
+  }, [socket]);
 
-  const checkUserStatus = (user_id: string): void => {
+  const checkUserStatus = useCallback((user_id: string): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
     socket.emit('check_user_status', { user_id });
-  };
+  }, [socket]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -276,7 +276,7 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
     }, 30000); // Ping every 30 seconds
 
     return () => clearInterval(pingInterval);
-  }, [socket?.connected]);
+  }, [socket]);
 
   const value: SocketContextType = {
     socket,

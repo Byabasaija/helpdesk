@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ export function OnlineUsersPage() {
     getOnlineUsers,
     connect,
   } = useSocket();
+  
+  const hasInitiallyFetched = useRef(false);
 
   useEffect(() => {
     // Auto-connect with API key from environment
@@ -24,8 +26,10 @@ export function OnlineUsersPage() {
   }, [isConnected, connect]);
 
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !hasInitiallyFetched.current) {
+      hasInitiallyFetched.current = true;
       getOnlineUsers();
+      
       // Refresh online users every 10 seconds
       const interval = setInterval(() => {
         getOnlineUsers();
