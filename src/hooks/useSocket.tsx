@@ -47,9 +47,9 @@ interface SocketContextType {
     content_type?: string;
     encrypted_payload?: string;
   }) => void;
-  getMessages: (recipient_id: string, limit?: number) => void;
-  getConversations: () => void;
-  getOnlineUsers: () => void;
+  getMessages: (recipient_id: string, limit?: number, showError?: boolean) => void;
+  getConversations: (showError?: boolean) => void;
+  getOnlineUsers: (showError?: boolean) => void;
   checkUserStatus: (user_id: string) => void;
   connect: (apiKey: string) => void;
   disconnect: () => void;
@@ -217,27 +217,33 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
     });
   }, [socket]);
 
-  const getMessages = useCallback((recipient_id: string, limit: number = 50): void => {
+  const getMessages = useCallback((recipient_id: string, limit: number = 50, showError: boolean = true): void => {
     if (!socket?.connected) {
-      toast.error('Not connected to chat server');
+      if (showError) {
+        toast.error('Not connected to chat server');
+      }
       return;
     }
 
     socket.emit('get_messages', { recipient_id, limit });
   }, [socket]);
 
-  const getConversations = useCallback((): void => {
+  const getConversations = useCallback((showError: boolean = false): void => {
     if (!socket?.connected) {
-      toast.error('Not connected to chat server');
+      if (showError) {
+        toast.error('Not connected to chat server');
+      }
       return;
     }
 
     socket.emit('get_conversations');
   }, [socket]);
 
-  const getOnlineUsers = useCallback((): void => {
+  const getOnlineUsers = useCallback((showError: boolean = false): void => {
     if (!socket?.connected) {
-      toast.error('Not connected to chat server');
+      if (showError) {
+        toast.error('Not connected to chat server');
+      }
       return;
     }
 

@@ -50,11 +50,15 @@ export function ConversationsPage() {
   useEffect(() => {
     if (isConnected && !hasInitiallyFetched.current) {
       hasInitiallyFetched.current = true;
-      getConversations();
+      
+      // Add a small delay to ensure connection is fully established
+      setTimeout(() => {
+        getConversations(false); // false = don't show error toast for automatic calls
+      }, 100);
       
       // Refresh conversations every 30 seconds
       const interval = setInterval(() => {
-        getConversations();
+        getConversations(false); // false = don't show error toast for automatic calls
       }, 30000);
       return () => clearInterval(interval);
     }
@@ -62,7 +66,7 @@ export function ConversationsPage() {
 
   useEffect(() => {
     if (selectedConversation) {
-      getMessages(selectedConversation);
+      getMessages(selectedConversation, 50, false); // false = don't show error toast for automatic calls
     }
   }, [selectedConversation, getMessages]);
 

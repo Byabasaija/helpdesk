@@ -28,11 +28,15 @@ export function OnlineUsersPage() {
   useEffect(() => {
     if (isConnected && !hasInitiallyFetched.current) {
       hasInitiallyFetched.current = true;
-      getOnlineUsers();
+      
+      // Add a small delay to ensure connection is fully established
+      setTimeout(() => {
+        getOnlineUsers(false); // false = don't show error toast for automatic calls
+      }, 100);
       
       // Refresh online users every 10 seconds
       const interval = setInterval(() => {
-        getOnlineUsers();
+        getOnlineUsers(false); // false = don't show error toast for automatic calls
       }, 10000);
       return () => clearInterval(interval);
     }
@@ -40,7 +44,7 @@ export function OnlineUsersPage() {
 
   const handleRefresh = () => {
     if (isConnected) {
-      getOnlineUsers();
+      getOnlineUsers(true); // true = show error toast for manual calls
     }
   };
 
