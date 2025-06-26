@@ -14,16 +14,29 @@ interface Message {
   recipient_id: string;
   sender_name: string;
   recipient_name: string;
-  timestamp: string;
+  group_id?: string;
+  created_at: string;
   delivered: boolean;
+  delivered_at?: string;
 }
 
 interface Conversation {
-  id: string;
-  user_id: string;
-  user_name: string;
-  last_message?: string;
-  last_message_timestamp?: string;
+  partner_id: string;
+  partner_name: string;
+  last_message?: {
+    id: string;
+    sender_id: string;
+    recipient_id: string;
+    sender_name: string;
+    recipient_name: string;
+    group_id?: string;
+    encrypted_payload?: string;
+    content: string;
+    content_type: string;
+    created_at: string;
+    delivered: boolean;
+    delivered_at?: string;
+  };
   unread_count?: number;
 }
 

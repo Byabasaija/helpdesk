@@ -16,8 +16,12 @@ interface Message {
   recipient_id: string;
   sender_name: string;
   recipient_name: string;
-  timestamp: string;
+  group_id?: string;
+  encrypted_payload?: string;
+  content_type: string;
+  created_at: string;
   delivered: boolean;
+  delivered_at?: string;
 }
 
 
@@ -85,12 +89,12 @@ export function ConversationsPage() {
   const handleSendMessage = () => {
     if (!messageInput.trim() || !selectedConversation) return;
 
-    const selectedConv = conversations.find(c => c.user_id === selectedConversation);
+    const selectedConv = conversations.find(c => c.partner_id === selectedConversation);
     if (!selectedConv) return;
 
     sendMessage({
       recipient_id: selectedConversation,
-      recipient_name: selectedConv.user_name,
+      recipient_name: selectedConv.partner_name,
       sender_name: user?.email || "Support Agent",
       content: messageInput,
     });
@@ -164,19 +168,19 @@ export function ConversationsPage() {
               <div className="space-y-1 p-2">
                 {conversations.map((conversation) => (
                   <div
-                    key={conversation.id}
+                    key={conversation.partner_id}
                     className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent ${
-                      selectedConversation === conversation.user_id
+                      selectedConversation === conversation.partner_id
                         ? "bg-accent border border-border"
                         : ""
                     }`}
-                    onClick={() => setSelectedConversation(conversation.user_id)}
+                    onClick={() => setSelectedConversation(conversation.partner_id)}
                   >
                     <div className="flex items-start justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full" />
                         <span className="font-medium text-sm">
-                          {conversation.user_name}
+                          {conversation.partner_name}
                         </span>
                       </div>
                       {conversation.unread_count && conversation.unread_count > 0 && (
@@ -187,12 +191,12 @@ export function ConversationsPage() {
                     </div>
                     {conversation.last_message && (
                       <p className="text-xs text-muted-foreground truncate">
-                        {conversation.last_message}
+                        {conversation.last_message.content}
                       </p>
                     )}
-                    {conversation.last_message_timestamp && (
+                    {conversation.last_message && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatTime(conversation.last_message_timestamp)}
+                        {formatTime(conversation.last_message.created_at)}
                       </p>
                     )}
                   </div>
@@ -210,7 +214,7 @@ export function ConversationsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                {conversations.find(c => c.user_id === selectedConversation)?.user_name || "Unknown User"}
+                {conversations.find(c => c.partner_id === selectedConversation)?.partner_name || "Unknown User"}
               </CardTitle>
             </CardHeader>
             <Separator />
@@ -230,7 +234,7 @@ export function ConversationsPage() {
                     {conversationMessages.map((message, index) => {
                       const isFromCustomer = message.sender_id === selectedConversation;
                       const showDate = index === 0 || 
-                        formatDate(message.timestamp) !== formatDate(conversationMessages[index - 1].timestamp);
+                        formatDate(message.created_at) !== formatDate(conversationMessages[index - 1].created_at);
                       
                       return (
                         <div key={message.message_id}>
@@ -238,7 +242,7 @@ export function ConversationsPage() {
                             <div className="flex items-center gap-2 my-4">
                               <Separator className="flex-1" />
                               <span className="text-xs text-muted-foreground px-2">
-                                {formatDate(message.timestamp)}
+                                {formatDate(message.created_at)}
                               </span>
                               <Separator className="flex-1" />
                             </div>
@@ -256,7 +260,7 @@ export function ConversationsPage() {
                                 isFromCustomer ? "text-muted-foreground" : "text-primary-foreground/70"
                               }`}>
                                 <Clock className="h-3 w-3" />
-                                {formatTime(message.timestamp)}
+                                {formatTime(message.created_at)}
                                 {!isFromCustomer && (
                                   <Badge 
                                     variant={message.delivered ? "default" : "secondary"} 

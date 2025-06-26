@@ -104,10 +104,10 @@ export function ChatInterface(): JSX.Element {
                 Disconnect
               </Button>
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={getConversations} variant="secondary" size="sm">
+                <Button onClick={() => getConversations(true)} variant="secondary" size="sm">
                   Get Conversations
                 </Button>
-                <Button onClick={getOnlineUsers} variant="secondary" size="sm">
+                <Button onClick={() => getOnlineUsers(true)} variant="secondary" size="sm">
                   Get Online Users
                 </Button>
               </div>
@@ -195,7 +195,7 @@ export function ChatInterface(): JSX.Element {
                   <div className="flex justify-between items-start text-sm">
                     <span className="font-medium">{message.sender_name}</span>
                     <span className="text-muted-foreground">
-                      {new Date(message.timestamp).toLocaleTimeString()}
+                      {new Date(message.created_at).toLocaleTimeString()}
                     </span>
                   </div>
                   <p className="mt-1">{message.content}</p>
@@ -245,17 +245,17 @@ export function ChatInterface(): JSX.Element {
             ) : (
               conversations.map((conv) => (
                 <div 
-                  key={conv.id} 
+                  key={conv.partner_id} 
                   className="p-2 rounded border cursor-pointer hover:bg-muted/50"
                   onClick={() => {
-                    setRecipientId(conv.user_id);
-                    setRecipientName(conv.user_name);
+                    setRecipientId(conv.partner_id);
+                    setRecipientName(conv.partner_name);
                   }}
                 >
-                  <div className="font-medium">{conv.user_name}</div>
+                  <div className="font-medium">{conv.partner_name}</div>
                   {conv.last_message && (
                     <div className="text-sm text-muted-foreground truncate">
-                      {conv.last_message}
+                      {conv.last_message.content}
                     </div>
                   )}
                   {conv.unread_count && conv.unread_count > 0 && (
