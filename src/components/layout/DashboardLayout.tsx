@@ -109,7 +109,7 @@ export function DashboardLayout({ children, currentPage, onPageChange }: Dashboa
                     <div className="flex items-center gap-2 px-2 py-1.5 rounded-md">
                       <Avatar className="h-6 w-6">
                         <AvatarFallback className="text-xs">
-                          {user?.email || 'U'}
+                          {user?.email?.charAt(0).toUpperCase() || 'U'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col flex-1 min-w-0">

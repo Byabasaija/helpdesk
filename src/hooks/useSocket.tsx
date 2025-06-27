@@ -136,18 +136,7 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       toast.error('Failed to connect to chat server');
     });
 
-    // Message events
-    newSocket.on('message_sent', (message: Message) => {
-      console.log('Message sent:', message);
-      setMessages(prev => [message, ...prev]);
-    });
-
-    newSocket.on('new_message', (message: Message) => {
-      console.log('New message received:', message);
-      setMessages(prev => [message, ...prev]);
-      toast.success(`New message from ${message.sender_name}`);
-    });
-
+    // Message events - only listen to the 'messages' event as per backend contract
     newSocket.on('messages', (data: { user_id: string; recipient_id: string; messages: Message[] }) => {
       console.log('Messages received:', data);
       setMessages(data.messages || []);

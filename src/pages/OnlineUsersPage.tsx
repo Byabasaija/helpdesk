@@ -153,7 +153,7 @@ export function OnlineUsersPage() {
                         <div className="relative">
                           <Avatar className="h-10 w-10">
                             <AvatarFallback>
-                              {(user.user_name || user.user_id).charAt(0).toUpperCase()}
+                              {(user.user_name || user.user_id || 'U').charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>

@@ -32,6 +32,7 @@ export function ConversationsPage() {
     isConnected,
     messages,
     conversations,
+    onlineUsers,
     sendMessage,
     getMessages,
     getConversations,
@@ -42,6 +43,14 @@ export function ConversationsPage() {
   const [messageInput, setMessageInput] = useState("");
   const [conversationMessages, setConversationMessages] = useState<Message[]>([]);
   const hasInitiallyFetched = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [conversationMessages]);
 
   useEffect(() => {
     // Auto-connect with API key from environment
@@ -75,13 +84,14 @@ export function ConversationsPage() {
   }, [selectedConversation, getMessages]);
 
   useEffect(() => {
-    // Filter messages for the selected conversation
+    // Filter and sort messages for the selected conversation
     if (selectedConversation) {
-      const filteredMessages = messages.filter(
-        (msg) =>
+      const filteredMessages = messages
+        .filter((msg) =>
           msg.sender_id === selectedConversation || 
           msg.recipient_id === selectedConversation
-      );
+        )
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()); // Oldest to newest
       setConversationMessages(filteredMessages);
     }
   }, [messages, selectedConversation]);
@@ -102,15 +112,15 @@ export function ConversationsPage() {
     setMessageInput("");
   };
 
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
+  const formatTime = (createdAt: string) => {
+    return new Date(createdAt).toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
   };
 
-  const formatDate = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatDate = (createdAt: string) => {
+    const date = new Date(createdAt);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -145,9 +155,9 @@ export function ConversationsPage() {
   }
 
   return (
-    <div className="flex h-full gap-4">
+    <div className="flex h-[calc(100vh-120px)] gap-4">
       {/* Conversations List */}
-      <Card className="w-80 flex flex-col">
+      <Card className="w-80 flex flex-col h-full">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5" />
@@ -157,7 +167,7 @@ export function ConversationsPage() {
             </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 p-0">
+        <CardContent className="flex-1 p-0 overflow-hidden">
           <ScrollArea className="h-full">
             {conversations.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground">
@@ -166,7 +176,14 @@ export function ConversationsPage() {
               </div>
             ) : (
               <div className="space-y-1 p-2">
-                {conversations.map((conversation) => (
+                {conversations
+                  .sort((a, b) => {
+                    // Sort by last message created_at, most recent first
+                    const aTime = a.last_message?.created_at || '0';
+                    const bTime = b.last_message?.created_at || '0';
+                    return new Date(bTime).getTime() - new Date(aTime).getTime();
+                  })
+                  .map((conversation) => (
                   <div
                     key={conversation.partner_id}
                     className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent ${
@@ -178,7 +195,11 @@ export function ConversationsPage() {
                   >
                     <div className="flex items-start justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                        <div className={`w-2 h-2 rounded-full ${
+                          onlineUsers.some(user => user.user_id === conversation.partner_id)
+                            ? 'bg-green-500'
+                            : 'bg-gray-300'
+                        }`} />
                         <span className="font-medium text-sm">
                           {conversation.partner_name}
                         </span>
@@ -208,20 +229,20 @@ export function ConversationsPage() {
       </Card>
 
       {/* Chat Area */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="flex-1 flex flex-col h-full">
         {selectedConversation ? (
           <>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-shrink-0">
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
                 {conversations.find(c => c.partner_id === selectedConversation)?.partner_name || "Unknown User"}
               </CardTitle>
             </CardHeader>
-            <Separator />
+            <Separator className="flex-shrink-0" />
             
-            {/* Messages */}
-            <CardContent className="flex-1 p-0">
-              <ScrollArea className="h-full p-4">
+            {/* Messages - Independent Scrolling */}
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full p-4" id="messages-scroll-area">
                 {conversationMessages.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
                     <div className="text-center">
@@ -230,7 +251,7 @@ export function ConversationsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {conversationMessages.map((message, index) => {
                       const isFromCustomer = message.sender_id === selectedConversation;
                       const showDate = index === 0 || 
@@ -239,35 +260,34 @@ export function ConversationsPage() {
                       return (
                         <div key={message.message_id}>
                           {showDate && (
-                            <div className="flex items-center gap-2 my-4">
+                            <div className="flex items-center gap-2 my-6">
                               <Separator className="flex-1" />
-                              <span className="text-xs text-muted-foreground px-2">
+                              <span className="text-xs text-muted-foreground px-3 py-1 bg-background rounded-full border">
                                 {formatDate(message.created_at)}
                               </span>
                               <Separator className="flex-1" />
                             </div>
                           )}
-                          <div className={`flex ${isFromCustomer ? "justify-start" : "justify-end"}`}>
+                          <div className={`flex ${isFromCustomer ? "justify-start" : "justify-end"} mb-1`}>
                             <div
-                              className={`max-w-[70%] rounded-lg p-3 ${
+                              className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
                                 isFromCustomer
-                                  ? "bg-muted"
-                                  : "bg-primary text-primary-foreground"
+                                  ? "bg-muted rounded-bl-md"
+                                  : "bg-primary text-primary-foreground rounded-br-md"
                               }`}
                             >
-                              <p className="text-sm">{message.content}</p>
-                              <div className={`flex items-center gap-1 mt-1 text-xs ${
+                              <p className="text-sm break-words">{message.content}</p>
+                              <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
                                 isFromCustomer ? "text-muted-foreground" : "text-primary-foreground/70"
                               }`}>
-                                <Clock className="h-3 w-3" />
-                                {formatTime(message.created_at)}
+                                <span>{formatTime(message.created_at)}</span>
                                 {!isFromCustomer && (
-                                  <Badge 
-                                    variant={message.delivered ? "default" : "secondary"} 
-                                    className="text-xs ml-2"
-                                  >
-                                    {message.delivered ? "Delivered" : "Pending"}
-                                  </Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {message.delivered && (
+                                      <span className="text-xs">✓</span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -275,14 +295,16 @@ export function ConversationsPage() {
                         </div>
                       );
                     })}
+                    {/* Invisible element to scroll to */}
+                    <div ref={messagesEndRef} />
                   </div>
                 )}
               </ScrollArea>
-            </CardContent>
+            </div>
 
-            {/* Message Input */}
-            <Separator />
-            <CardContent className="p-4">
+            {/* Message Input - Fixed at bottom */}
+            <Separator className="flex-shrink-0" />
+            <CardContent className="p-4 flex-shrink-0">
               <div className="flex gap-2">
                 <Input
                   value={messageInput}
