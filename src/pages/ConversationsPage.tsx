@@ -68,14 +68,31 @@ export function ConversationsPage() {
       setTimeout(() => {
         getConversations(false); // false = don't show error toast for automatic calls
       }, 100);
-      
-      // Refresh conversations every 30 seconds
-      const interval = setInterval(() => {
-        getConversations(false); // false = don't show error toast for automatic calls
-      }, 30000);
-      return () => clearInterval(interval);
     }
   }, [isConnected, getConversations]);
+
+  // Auto-refresh conversations periodically and when messages change
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const interval = setInterval(() => {
+      getConversations(false); // false = don't show error toast for automatic calls
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [isConnected, getConversations]);
+
+  // Refresh conversations when messages array changes (new messages arrived)
+  useEffect(() => {
+    if (isConnected && messages.length > 0) {
+      // Debounce conversation updates to avoid too many calls
+      const timeout = setTimeout(() => {
+        getConversations(false);
+      }, 500);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [messages.length, isConnected, getConversations]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -88,13 +105,13 @@ export function ConversationsPage() {
     if (selectedConversation) {
       const filteredMessages = messages
         .filter((msg) =>
-          msg.sender_id === selectedConversation || 
-          msg.recipient_id === selectedConversation
+          (msg.sender_id === selectedConversation && msg.recipient_id === user?.id) || 
+          (msg.recipient_id === selectedConversation && msg.sender_id === user?.id)
         )
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()); // Oldest to newest
       setConversationMessages(filteredMessages);
     }
-  }, [messages, selectedConversation]);
+  }, [messages, selectedConversation, user?.id]);
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !selectedConversation) return;

@@ -127,6 +127,15 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       console.log('Socket disconnected:', reason);
       setIsConnected(false);
       toast.error('Disconnected from chat server');
+      
+      // Auto-reconnect after a delay (like your chat widget)
+      if (reason !== 'io client disconnect') {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          toast.info('Attempting to reconnect...');
+          newSocket.connect();
+        }, 3000);
+      }
     });
 
     newSocket.on('connect_error', (error: Error) => {
@@ -136,10 +145,34 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       toast.error('Failed to connect to chat server');
     });
 
-    // Message events - only listen to the 'messages' event as per backend contract
+    // Message events - listen to both bulk messages and individual real-time messages
     newSocket.on('messages', (data: { user_id: string; recipient_id: string; messages: Message[] }) => {
       console.log('Messages received:', data);
       setMessages(data.messages || []);
+    });
+
+    // Real-time individual message listener (like your chat widget)
+    newSocket.on('message', (data: Message) => {
+      console.log('Individual message received:', data);
+      // Simple append like your widget - no complex deduplication
+      setMessages(prev => {
+        // Check if message already exists to avoid duplicates
+        const messageExists = prev.some(msg => msg.message_id === data.message_id);
+        if (messageExists) {
+          return prev;
+        }
+        // Add new message and sort by created_at
+        const updatedMessages = [...prev, data].sort((a, b) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        return updatedMessages;
+      });
+    });
+
+    // Message sent confirmation (optional - like your chat widget)
+    newSocket.on('message_sent', (data: { message_id?: string; success?: boolean; error?: string }) => {
+      console.log('Message sent confirmation received:', data);
+      // Your widget just logs this - no complex logic needed
     });
 
     // Conversation events
@@ -213,11 +246,35 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       return;
     }
 
+    if (!user) {
+      toast.error('User not authenticated');
+      return;
+    }
+
+    // Create optimistic message (like your chat widget with real UUID)
+    const optimisticMessage: Message = {
+      message_id: crypto.randomUUID(),
+      content: data.content,
+      sender_id: user.id,
+      recipient_id: data.recipient_id,
+      sender_name: data.sender_name,
+      recipient_name: data.recipient_name,
+      content_type: data.content_type || 'text',
+      created_at: new Date().toISOString(),
+      delivered: false,
+      group_id: data.encrypted_payload ? undefined : undefined,
+      encrypted_payload: data.encrypted_payload,
+    };
+
+    // Add optimistic message to UI immediately (like your widget)
+    setMessages(prev => [...prev, optimisticMessage]);
+
+    // Send message to server
     socket.emit('send_message', {
       ...data,
       content_type: data.content_type || 'text',
     });
-  }, [socket]);
+  }, [socket, user]);
 
   const getMessages = useCallback((recipient_id: string, limit: number = 50, showError: boolean = true): void => {
     if (!socket?.connected) {
