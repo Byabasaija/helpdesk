@@ -122,7 +122,7 @@ export function ConversationsPage() {
     sendMessage({
       recipient_id: selectedConversation,
       recipient_name: selectedConv.partner_name,
-      sender_name: user?.email || "Support Agent",
+      sender_name: user?.email || "Pascal",
       content: messageInput,
     });
 

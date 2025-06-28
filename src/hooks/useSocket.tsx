@@ -151,16 +151,11 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       setMessages(data.messages || []);
     });
 
-    // Real-time individual message listener (like your chat widget)
+    // Real-time individual message listener 
     newSocket.on('message', (data: Message) => {
       console.log('Individual message received:', data);
-      // Simple append like your widget - no complex deduplication
+      // Simple append - no duplicate checking needed
       setMessages(prev => {
-        // Check if message already exists to avoid duplicates
-        const messageExists = prev.some(msg => msg.message_id === data.message_id);
-        if (messageExists) {
-          return prev;
-        }
         // Add new message and sort by created_at
         const updatedMessages = [...prev, data].sort((a, b) => 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -169,10 +164,35 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       });
     });
 
-    // Message sent confirmation (optional - like your chat widget)
-    newSocket.on('message_sent', (data: { message_id?: string; success?: boolean; error?: string }) => {
+    // Message sent confirmation - add to UI when message is actually sent
+    newSocket.on('message_sent', (data) => {
       console.log('Message sent confirmation received:', data);
-      // Your widget just logs this - no complex logic needed
+      
+      // Convert server response to our Message format
+      const message: Message = {
+        message_id: data.message_id,
+        content: data.content,
+        encrypted_payload: data.encrypted_payload,
+        content_type: data.content_type,
+        sender_id: data.sender_id,
+        recipient_id: data.recipient_id,
+        sender_name: data.sender_name,
+        recipient_name: data.recipient_name,
+        created_at: data.created_at,
+        delivered: data.delivered || true,
+        delivered_at: data.delivered_at,
+        group_id: data.group_id,
+      };
+      
+      console.log('Adding message to UI:', message);
+      
+      // Add the actual saved message from server to UI
+      setMessages(prev => {
+        console.log('Previous messages count:', prev.length);
+        const updatedMessages = [...prev, message];
+        console.log('New messages count:', updatedMessages.length);
+        return updatedMessages;
+      });
     });
 
     // Conversation events
@@ -251,25 +271,7 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       return;
     }
 
-    // Create optimistic message (like your chat widget with real UUID)
-    const optimisticMessage: Message = {
-      message_id: crypto.randomUUID(),
-      content: data.content,
-      sender_id: user.id,
-      recipient_id: data.recipient_id,
-      sender_name: data.sender_name,
-      recipient_name: data.recipient_name,
-      content_type: data.content_type || 'text',
-      created_at: new Date().toISOString(),
-      delivered: false,
-      group_id: data.encrypted_payload ? undefined : undefined,
-      encrypted_payload: data.encrypted_payload,
-    };
-
-    // Add optimistic message to UI immediately (like your widget)
-    setMessages(prev => [...prev, optimisticMessage]);
-
-    // Send message to server
+    // No optimistic message - just send to server and wait for message_sent event
     socket.emit('send_message', {
       ...data,
       content_type: data.content_type || 'text',

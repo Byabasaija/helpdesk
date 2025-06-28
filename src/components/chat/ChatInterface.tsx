@@ -187,7 +187,9 @@ export function ChatInterface(): JSX.Element {
             {messages.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">No messages yet</p>
             ) : (
-              messages.map((message) => (
+              messages
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map((message) => (
                 <div
                   key={message.message_id}
                   className="p-3 rounded-lg border bg-muted/50"
