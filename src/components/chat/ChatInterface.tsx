@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useState, useEffect, type JSX } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,24 +24,24 @@ export function ChatInterface(): JSX.Element {
     authenticate
   } = useSocket();
   
-  const [apiKey, setApiKey] = useState<string>('');
   const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [messageContent, setMessageContent] = useState<string>('');
 
-  const handleConnect = async (): Promise<void> => {
-    if (!apiKey.trim()) {
-      return;
-    }
-    
-    try {
-      // First authenticate
-      await authenticate(apiKey, user?.email || 'Unknown User');
-      // Then connect
-      connect(apiKey, user?.email || 'Unknown User');
-    } catch (error) {
-      console.error('Authentication failed:', error);
-    }
-  };
+  // Auto-authenticate and connect on mount
+  useEffect(() => {
+    const handleAuth = async () => {
+      if (!user || isConnected) return;
+      
+      try {
+        const apiKey = await authenticate(user.email || user.id, user.email || user.id);
+        connect(apiKey, user.email || user.id, user.email || user.id);
+      } catch (error) {
+        console.error('Authentication failed:', error);
+      }
+    };
+
+    handleAuth();
+  }, [user, isConnected, authenticate, connect]);
 
   const handleSendMessage = (): void => {
     if (!messageContent.trim() || !selectedRoom.trim()) {
@@ -90,27 +90,6 @@ export function ChatInterface(): JSX.Element {
             </span>
           </div>
 
-          {!isConnected && (
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your API key"
-                disabled={isConnecting}
-              />
-              <Button 
-                onClick={handleConnect} 
-                disabled={isConnecting || !apiKey.trim()}
-                className="w-full"
-              >
-                {isConnecting ? 'Connecting...' : 'Connect'}
-              </Button>
-            </div>
-          )}
-
           {isConnected && (
             <div className="space-y-2">
               <Button onClick={disconnect} variant="outline" className="w-full">
@@ -124,6 +103,14 @@ export function ChatInterface(): JSX.Element {
                   Join Room
                 </Button>
               </div>
+            </div>
+          )}
+
+          {!isConnected && !isConnecting && (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground">
+                Authentication in progress...
+              </p>
             </div>
           )}
         </CardContent>

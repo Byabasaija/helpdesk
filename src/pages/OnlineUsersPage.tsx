@@ -18,20 +18,20 @@ export function OnlineUsersPage() {
   } = useSocket();
 
   useEffect(() => {
-    // Auto-connect with API key from environment
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (apiKey && !isConnected) {
-      const connectAndAuth = async () => {
-        try {
-          await authenticate(apiKey, user?.email || 'Unknown User');
-          connect(apiKey, user?.email || 'Unknown User');
-        } catch (error) {
-          console.error('Authentication failed:', error);
-        }
-      };
-      connectAndAuth();
-    }
-  }, [isConnected, connect, authenticate, user?.email]);
+    // Auto-connect using authentication flow
+    const handleAuth = async () => {
+      if (!user || isConnected) return;
+      
+      try {
+        const apiKey = await authenticate(user.email || user.id, user.email || user.id);
+        connect(apiKey, user.email || user.id, user.email || user.id);
+      } catch (error) {
+        console.error('Authentication failed:', error);
+      }
+    };
+
+    handleAuth();
+  }, [user, isConnected, authenticate, connect]);
 
   const handleRefresh = () => {
     // In the new API, online users are pushed automatically
