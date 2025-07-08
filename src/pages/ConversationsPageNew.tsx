@@ -21,7 +21,14 @@ interface Message {
   is_deleted?: boolean;
 }
 
-
+interface Room {
+  room_id: string;
+  name: string;
+  description?: string;
+  room_type: string;
+  member_count: number;
+  last_message_at?: string;
+}
 
 export function ConversationsPage() {
   const { user } = useAuth();
@@ -29,6 +36,8 @@ export function ConversationsPage() {
     isConnected,
     messages,
     rooms,
+    onlineUsers,
+    currentRoom,
     sendMessage,
     joinRoom,
     getMessages,

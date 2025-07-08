@@ -14,10 +14,10 @@ import {
 import {
   MessageSquare,
   Settings,
-  BarChart3,
-  Code,
+  // BarChart3,
+  // Code,
   Headphones,
-  UserCheck,
+  // UserCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -36,24 +36,24 @@ const navigationItems = [
     id: "conversations",
     description: "Manage customer conversations",
   },
-  {
-    title: "Online Users",
-    icon: UserCheck,
-    id: "online-users",
-    description: "View currently online users",
-  },
-  {
-    title: "Widget Generator",
-    icon: Code,
-    id: "widget-generator",
-    description: "Generate chat widgets",
-  },
-  {
-    title: "Analytics",
-    icon: BarChart3,
-    id: "analytics",
-    description: "View chat analytics",
-  },
+  // {
+  //   title: "Online Users",
+  //   icon: UserCheck,
+  //   id: "online-users",
+  //   description: "View currently online users",
+  // },
+  // {
+  //   title: "Widget Generator",
+  //   icon: Code,
+  //   id: "widget-generator",
+  //   description: "Generate chat widgets",
+  // },
+  // {
+  //   title: "Analytics",
+  //   icon: BarChart3,
+  //   id: "analytics",
+  //   description: "View chat analytics",
+  // },
   {
     title: "Settings",
     icon: Settings,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,46 +6,36 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
 import { Users, UserCheck, MessageSquare, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/hooks/useAuth";
 
 export function OnlineUsersPage() {
+  const { user } = useAuth();
   const {
     isConnected,
     onlineUsers,
-    getOnlineUsers,
     connect,
+    authenticate
   } = useSocket();
-  
-  const hasInitiallyFetched = useRef(false);
 
   useEffect(() => {
     // Auto-connect with API key from environment
     const apiKey = import.meta.env.VITE_API_KEY;
     if (apiKey && !isConnected) {
-      connect(apiKey);
+      const connectAndAuth = async () => {
+        try {
+          await authenticate(apiKey, user?.email || 'Unknown User');
+          connect(apiKey, user?.email || 'Unknown User');
+        } catch (error) {
+          console.error('Authentication failed:', error);
+        }
+      };
+      connectAndAuth();
     }
-  }, [isConnected, connect]);
-
-  useEffect(() => {
-    if (isConnected && !hasInitiallyFetched.current) {
-      hasInitiallyFetched.current = true;
-      
-      // Add a small delay to ensure connection is fully established
-      setTimeout(() => {
-        getOnlineUsers(false); // false = don't show error toast for automatic calls
-      }, 100);
-      
-      // Refresh online users every 10 seconds
-      const interval = setInterval(() => {
-        getOnlineUsers(false); // false = don't show error toast for automatic calls
-      }, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, getOnlineUsers]);
+  }, [isConnected, connect, authenticate, user?.email]);
 
   const handleRefresh = () => {
-    if (isConnected) {
-      getOnlineUsers(true); // true = show error toast for manual calls
-    }
+    // In the new API, online users are pushed automatically
+    // No explicit refresh needed
   };
 
   if (!isConnected) {
@@ -153,14 +143,14 @@ export function OnlineUsersPage() {
                         <div className="relative">
                           <Avatar className="h-10 w-10">
                             <AvatarFallback>
-                              {(user.user_name || user.user_id || 'U').charAt(0).toUpperCase()}
+                              {(user.display_name || user.user_id || 'U').charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
-                            {user.user_name || "Unknown User"}
+                            {user.display_name || "Unknown User"}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
                             ID: {user.user_id}

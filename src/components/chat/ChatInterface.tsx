@@ -15,35 +15,41 @@ export function ChatInterface(): JSX.Element {
     connect, 
     disconnect, 
     messages, 
-    conversations,
+    rooms,
     onlineUsers,
     sendMessage,
     getMessages,
-    getConversations,
-    getOnlineUsers
+    getRooms,
+    joinRoom,
+    authenticate
   } = useSocket();
   
   const [apiKey, setApiKey] = useState<string>('');
-  const [recipientId, setRecipientId] = useState<string>('');
-  const [recipientName, setRecipientName] = useState<string>('');
+  const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [messageContent, setMessageContent] = useState<string>('');
 
-  const handleConnect = (): void => {
+  const handleConnect = async (): Promise<void> => {
     if (!apiKey.trim()) {
       return;
     }
-    connect(apiKey);
+    
+    try {
+      // First authenticate
+      await authenticate(apiKey, user?.email || 'Unknown User');
+      // Then connect
+      connect(apiKey, user?.email || 'Unknown User');
+    } catch (error) {
+      console.error('Authentication failed:', error);
+    }
   };
 
   const handleSendMessage = (): void => {
-    if (!messageContent.trim() || !recipientId.trim() || !recipientName.trim()) {
+    if (!messageContent.trim() || !selectedRoom.trim()) {
       return;
     }
 
     sendMessage({
-      recipient_id: recipientId,
-      recipient_name: recipientName,
-      sender_name: user?.email || 'Unknown',
+      room_id: selectedRoom,
       content: messageContent,
     });
 
@@ -51,10 +57,17 @@ export function ChatInterface(): JSX.Element {
   };
 
   const handleGetMessages = (): void => {
-    if (!recipientId.trim()) {
+    if (!selectedRoom.trim()) {
       return;
     }
-    getMessages(recipientId);
+    getMessages(selectedRoom);
+  };
+
+  const handleJoinRoom = (): void => {
+    if (!selectedRoom.trim()) {
+      return;
+    }
+    joinRoom(selectedRoom);
   };
 
   return (
@@ -104,11 +117,11 @@ export function ChatInterface(): JSX.Element {
                 Disconnect
               </Button>
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => getConversations(true)} variant="secondary" size="sm">
-                  Get Conversations
+                <Button onClick={() => getRooms()} variant="secondary" size="sm">
+                  Get Rooms
                 </Button>
-                <Button onClick={() => getOnlineUsers(true)} variant="secondary" size="sm">
-                  Get Online Users
+                <Button onClick={() => handleJoinRoom()} variant="secondary" size="sm" disabled={!selectedRoom}>
+                  Join Room
                 </Button>
               </div>
             </div>
@@ -121,28 +134,17 @@ export function ChatInterface(): JSX.Element {
         <CardHeader>
           <CardTitle>Send Message</CardTitle>
           <CardDescription>
-            Send a message to another user
+            Send a message to a room
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="recipientId">Recipient ID</Label>
+            <Label htmlFor="selectedRoom">Room ID</Label>
             <Input
-              id="recipientId"
-              value={recipientId}
-              onChange={(e) => setRecipientId(e.target.value)}
-              placeholder="Enter recipient user ID"
-              disabled={!isConnected}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="recipientName">Recipient Name</Label>
-            <Input
-              id="recipientName"
-              value={recipientName}
-              onChange={(e) => setRecipientName(e.target.value)}
-              placeholder="Enter recipient name"
+              id="selectedRoom"
+              value={selectedRoom}
+              onChange={(e) => setSelectedRoom(e.target.value)}
+              placeholder="Enter room ID (e.g., 'general', 'support')"
               disabled={!isConnected}
             />
           </div>
@@ -162,14 +164,14 @@ export function ChatInterface(): JSX.Element {
           <div className="grid grid-cols-2 gap-2">
             <Button 
               onClick={handleSendMessage}
-              disabled={!isConnected || !messageContent.trim() || !recipientId.trim()}
+              disabled={!isConnected || !messageContent.trim() || !selectedRoom.trim()}
             >
               Send Message
             </Button>
             <Button 
               onClick={handleGetMessages}
               variant="outline"
-              disabled={!isConnected || !recipientId.trim()}
+              disabled={!isConnected || !selectedRoom.trim()}
             >
               Get Messages
             </Button>
@@ -195,17 +197,19 @@ export function ChatInterface(): JSX.Element {
                   className="p-3 rounded-lg border bg-muted/50"
                 >
                   <div className="flex justify-between items-start text-sm">
-                    <span className="font-medium">{message.sender_name}</span>
+                    <span className="font-medium">{message.sender_display_name}</span>
                     <span className="text-muted-foreground">
                       {new Date(message.created_at).toLocaleTimeString()}
                     </span>
                   </div>
                   <p className="mt-1">{message.content}</p>
                   <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
-                    <span>To: {message.recipient_name}</span>
-                    <Badge variant={message.delivered ? "default" : "secondary"} className="text-xs">
-                      {message.delivered ? "Delivered" : "Pending"}
-                    </Badge>
+                    <span>Room: {message.room_id}</span>
+                    {message.is_edited && (
+                      <Badge variant="secondary" className="text-xs">
+                        Edited
+                      </Badge>
+                    )}
                   </div>
                 </div>
               ))
@@ -227,7 +231,7 @@ export function ChatInterface(): JSX.Element {
               onlineUsers.map((user) => (
                 <div key={user.user_id} className="flex items-center gap-2 p-2 rounded border">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>{user.user_name || user.user_id}</span>
+                  <span>{user.display_name || user.user_id}</span>
                 </div>
               ))
             )}
@@ -235,35 +239,32 @@ export function ChatInterface(): JSX.Element {
         </CardContent>
       </Card>
 
-      {/* Conversations */}
+      {/* Rooms */}
       <Card>
         <CardHeader>
-          <CardTitle>Conversations ({conversations.length})</CardTitle>
+          <CardTitle>Rooms ({rooms.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {conversations.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No conversations yet</p>
+            {rooms.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No rooms yet</p>
             ) : (
-              conversations.map((conv) => (
+              rooms.map((room) => (
                 <div 
-                  key={conv.partner_id} 
+                  key={room.room_id} 
                   className="p-2 rounded border cursor-pointer hover:bg-muted/50"
                   onClick={() => {
-                    setRecipientId(conv.partner_id);
-                    setRecipientName(conv.partner_name);
+                    setSelectedRoom(room.room_id);
                   }}
                 >
-                  <div className="font-medium">{conv.partner_name}</div>
-                  {conv.last_message && (
-                    <div className="text-sm text-muted-foreground truncate">
-                      {conv.last_message.content}
+                  <div className="font-medium">{room.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {room.member_count} members • {room.room_type}
+                  </div>
+                  {room.description && (
+                    <div className="text-xs text-muted-foreground truncate">
+                      {room.description}
                     </div>
-                  )}
-                  {conv.unread_count && conv.unread_count > 0 && (
-                    <Badge variant="default" className="text-xs">
-                      {conv.unread_count}
-                    </Badge>
                   )}
                 </div>
               ))

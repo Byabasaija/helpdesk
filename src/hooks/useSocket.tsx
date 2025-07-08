@@ -1,48 +1,39 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import type { JSX, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
-// TypeScript interfaces
+// TypeScript interfaces for room-based chat
 interface Message {
   message_id: string;
+  room_id: string;
   content: string;
-  encrypted_payload?: string;
   content_type: string;
-  sender_id: string;
-  recipient_id: string;
-  sender_name: string;
-  recipient_name: string;
-  group_id?: string;
+  sender_user_id: string;
+  sender_display_name: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
+  file_mime_type?: string;
+  reply_to_id?: string;
+  is_edited: boolean;
+  is_deleted?: boolean;
   created_at: string;
-  delivered: boolean;
-  delivered_at?: string;
+  edited_at?: string;
 }
 
-interface Conversation {
-  partner_id: string;
-  partner_name: string;
-  last_message?: {
-    id: string;
-    sender_id: string;
-    recipient_id: string;
-    sender_name: string;
-    recipient_name: string;
-    group_id?: string;
-    encrypted_payload?: string;
-    content: string;
-    content_type: string;
-    created_at: string;
-    delivered: boolean;
-    delivered_at?: string;
-  };
-  unread_count?: number;
+interface Room {
+  room_id: string;
+  name: string;
+  description?: string;
+  room_type: string;
+  member_count: number;
+  last_message_at?: string;
 }
 
 interface OnlineUser {
   user_id: string;
-  user_name?: string;
+  display_name?: string;
 }
 
 interface SocketContextType {
@@ -50,21 +41,26 @@ interface SocketContextType {
   isConnected: boolean;
   isConnecting: boolean;
   messages: Message[];
-  conversations: Conversation[];
+  rooms: Room[];
   onlineUsers: OnlineUser[];
+  currentRoom: string | null;
   sendMessage: (data: {
-    recipient_id: string;
-    recipient_name: string;
-    sender_name: string;
+    room_id: string;
     content: string;
     content_type?: string;
-    encrypted_payload?: string;
+    file_url?: string;
+    file_name?: string;
+    file_size?: number;
+    file_mime_type?: string;
+    reply_to_id?: string;
   }) => void;
-  getMessages: (recipient_id: string, limit?: number, showError?: boolean) => void;
-  getConversations: (showError?: boolean) => void;
-  getOnlineUsers: (showError?: boolean) => void;
-  checkUserStatus: (user_id: string) => void;
-  connect: (apiKey: string) => void;
+  joinRoom: (room_id: string) => void;
+  leaveRoom: (room_id: string) => void;
+  getMessages: (room_id: string, limit?: number, offset?: number) => void;
+  getRooms: () => void;
+  getOnlineUsers: () => void;
+  authenticate: (userId: string, displayName: string) => Promise<string>;
+  connect: (apiKey: string, userId: string, displayName?: string) => void;
   disconnect: () => void;
 }
 
@@ -74,27 +70,61 @@ interface SocketProviderProps {
   children: ReactNode;
 }
 
+const restUrl = import.meta.env.VITE_REST_API_URL || 'http://localhost:8000/api/v1';
+const wsUrl = import.meta.env.VITE_WS_API_URL || 'ws://localhost:8000';
+
 export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
-  const { user } = useAuth();
+
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const connect = (apiKey: string): void => {
-    if (socket?.connected || isConnecting || !user) {
+  // Authentication function to get API key
+  const authenticate = useCallback(async (userId: string, displayName: string): Promise<string> => {
+    const masterKey = import.meta.env.VITE_MASTER_API_KEY;
+    if (!masterKey) {
+      throw new Error('Master API key not found in environment variables');
+    }
+
+    const response = await fetch(`${restUrl}/auth/user-login`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${masterKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        display_name: displayName,
+        permissions: ['read_messages', 'send_messages'],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Authentication failed');
+    }
+
+    const data = await response.json();
+    localStorage.setItem('userApiKey', data.api_key);
+    return data.api_key;
+  }, []);
+
+  const connect = (apiKey: string, userId: string, displayName?: string): void => {
+    if (socket?.connected || isConnecting) {
       return;
     }
 
     setIsConnecting(true);
 
-    const newSocket = io('ws://localhost:8000', {
+    const newSocket = io(`${wsUrl}`, {
       auth: {
-        user_id: user.id,
+        user_id: userId,
         api_key: apiKey,
+        display_name: displayName || userId,
       },
       path: '/sockets',
       transports: ['websocket'],
@@ -119,8 +149,12 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       }
     });
 
-    newSocket.on('connected', (data: { user_id: string; client_id: string }) => {
+    newSocket.on('connected', (data: { user_id: string; client_id: string; display_name: string }) => {
       console.log('Connection confirmed:', data);
+      // Auto-join user's rooms and get initial data
+      setTimeout(() => {
+        newSocket.emit('get_rooms');
+      }, 100);
     });
 
     newSocket.on('disconnect', (reason: string) => {
@@ -128,7 +162,7 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       setIsConnected(false);
       toast.error('Disconnected from chat server');
       
-      // Auto-reconnect after a delay (like your chat widget)
+      // Auto-reconnect after a delay
       if (reason !== 'io client disconnect') {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('Attempting to reconnect...');
@@ -145,18 +179,29 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       toast.error('Failed to connect to chat server');
     });
 
-    // Message events - listen to both bulk messages and individual real-time messages
-    newSocket.on('messages', (data: { user_id: string; recipient_id: string; messages: Message[] }) => {
-      console.log('Messages received:', data);
+    // Room events
+    newSocket.on('rooms', (data: { rooms: Room[] }) => {
+      console.log('Rooms received:', data);
+      setRooms(data.rooms || []);
+    });
+
+    newSocket.on('room_joined', (data: { room_id: string }) => {
+      console.log('Joined room:', data);
+      setCurrentRoom(data.room_id);
+      // Get messages for the joined room
+      newSocket.emit('get_messages', { room_id: data.room_id, limit: 50, offset: 0 });
+    });
+
+    // Message events
+    newSocket.on('messages', (data: { room_id: string; messages: Message[]; limit: number; offset: number }) => {
+      console.log('Messages received for room:', data.room_id, data);
       setMessages(data.messages || []);
     });
 
-    // Real-time individual message listener 
+    // Real-time individual message listener
     newSocket.on('message', (data: Message) => {
       console.log('Individual message received:', data);
-      // Simple append - no duplicate checking needed
       setMessages(prev => {
-        // Add new message and sort by created_at
         const updatedMessages = [...prev, data].sort((a, b) => 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
@@ -164,65 +209,25 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       });
     });
 
-    // Message sent confirmation - add to UI when message is actually sent
-    newSocket.on('message_sent', (data) => {
-      console.log('Message sent confirmation received:', data);
-      
-      // Convert server response to our Message format
-      const message: Message = {
-        message_id: data.message_id,
-        content: data.content,
-        encrypted_payload: data.encrypted_payload,
-        content_type: data.content_type,
-        sender_id: data.sender_id,
-        recipient_id: data.recipient_id,
-        sender_name: data.sender_name,
-        recipient_name: data.recipient_name,
-        created_at: data.created_at,
-        delivered: data.delivered || true,
-        delivered_at: data.delivered_at,
-        group_id: data.group_id,
-      };
-      
-      console.log('Adding message to UI:', message);
-      
-      // Add the actual saved message from server to UI
-      setMessages(prev => {
-        console.log('Previous messages count:', prev.length);
-        const updatedMessages = [...prev, message];
-        console.log('New messages count:', updatedMessages.length);
-        return updatedMessages;
-      });
-    });
-
-    // Conversation events
-    newSocket.on('conversations', (data: { conversations: Conversation[] }) => {
-      console.log('Conversations received:', data);
-      setConversations(data.conversations || []);
-    });
-
     // User presence events
-    newSocket.on('online_users', (data: { users: OnlineUser[] }) => {
+    newSocket.on('online_users', (data: { users: string[] }) => {
       console.log('Online users:', data);
-      setOnlineUsers(data.users || []);
+      const users = data.users?.map(userId => ({ user_id: userId })) || [];
+      setOnlineUsers(users);
     });
 
-    newSocket.on('user_status', (data: { user_id: string; online: boolean }) => {
-      console.log('User status:', data);
-    });
-
-    newSocket.on('user_online', (data: { user_id: string; user_name?: string }) => {
+    newSocket.on('user_online', (data: { user_id: string; client_id: string }) => {
       console.log('User came online:', data);
       setOnlineUsers(prev => {
         const exists = prev.find(u => u.user_id === data.user_id);
         if (!exists) {
-          return [...prev, data];
+          return [...prev, { user_id: data.user_id }];
         }
         return prev;
       });
     });
 
-    newSocket.on('user_offline', (data: { user_id: string }) => {
+    newSocket.on('user_offline', (data: { user_id: string; client_id: string }) => {
       console.log('User went offline:', data);
       setOnlineUsers(prev => prev.filter(u => u.user_id !== data.user_id));
     });
@@ -248,76 +253,72 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
       setIsConnected(false);
       setIsConnecting(false);
       setMessages([]);
-      setConversations([]);
+      setRooms([]);
       setOnlineUsers([]);
     }
   };
 
   const sendMessage = useCallback((data: {
-    recipient_id: string;
-    recipient_name: string;
-    sender_name: string;
+    room_id: string;
     content: string;
     content_type?: string;
-    encrypted_payload?: string;
+    file_url?: string;
+    file_name?: string;
+    file_size?: number;
+    file_mime_type?: string;
+    reply_to_id?: string;
   }): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
-    if (!user) {
-      toast.error('User not authenticated');
-      return;
-    }
-
-    // No optimistic message - just send to server and wait for message_sent event
-    socket.emit('send_message', {
-      ...data,
-      content_type: data.content_type || 'text',
-    });
-  }, [socket, user]);
-
-  const getMessages = useCallback((recipient_id: string, limit: number = 50, showError: boolean = true): void => {
-    if (!socket?.connected) {
-      if (showError) {
-        toast.error('Not connected to chat server');
-      }
-      return;
-    }
-
-    socket.emit('get_messages', { recipient_id, limit });
+    socket.emit('send_message', data);
   }, [socket]);
 
-  const getConversations = useCallback((showError: boolean = false): void => {
-    if (!socket?.connected) {
-      if (showError) {
-        toast.error('Not connected to chat server');
-      }
-      return;
-    }
-
-    socket.emit('get_conversations');
-  }, [socket]);
-
-  const getOnlineUsers = useCallback((showError: boolean = false): void => {
-    if (!socket?.connected) {
-      if (showError) {
-        toast.error('Not connected to chat server');
-      }
-      return;
-    }
-
-    socket.emit('get_online_users');
-  }, [socket]);
-
-  const checkUserStatus = useCallback((user_id: string): void => {
+  const joinRoom = useCallback((room_id: string): void => {
     if (!socket?.connected) {
       toast.error('Not connected to chat server');
       return;
     }
 
-    socket.emit('check_user_status', { user_id });
+    socket.emit('join_room', { room_id });
+  }, [socket]);
+
+  const leaveRoom = useCallback((room_id: string): void => {
+    if (!socket?.connected) {
+      toast.error('Not connected to chat server');
+      return;
+    }
+
+    socket.emit('leave_room', { room_id });
+  }, [socket]);
+
+  const getMessages = useCallback((room_id: string, limit: number = 50, offset: number = 0): void => {
+    if (!socket?.connected) {
+      toast.error('Not connected to chat server');
+      return;
+    }
+
+    socket.emit('get_messages', { room_id, limit, offset });
+  }, [socket]);
+
+  const getRooms = useCallback((): void => {
+    if (!socket?.connected) {
+      toast.error('Not connected to chat server');
+      return;
+    }
+
+    socket.emit('get_rooms');
+  }, [socket]);
+
+  const getOnlineUsers = useCallback((): void => {
+    if (!socket?.connected) {
+      toast.error('Not connected to chat server');
+      return;
+    }
+
+    socket.emit('online_users');
   }, [socket]);
 
   // Cleanup on unmount
@@ -350,13 +351,16 @@ export function SocketProvider({ children }: SocketProviderProps): JSX.Element {
     isConnected,
     isConnecting,
     messages,
-    conversations,
+    rooms,
     onlineUsers,
+    currentRoom,
     sendMessage,
+    joinRoom,
+    leaveRoom,
     getMessages,
-    getConversations,
+    getRooms,
     getOnlineUsers,
-    checkUserStatus,
+    authenticate,
     connect,
     disconnect,
   };
