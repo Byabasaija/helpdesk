@@ -33,8 +33,6 @@ export function ConversationsPage() {
     joinRoom,
     getMessages,
     getRooms,
-    authenticate,
-    connect,
   } = useSocket();
 
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
@@ -49,22 +47,6 @@ export function ConversationsPage() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [roomMessages]);
-
-  // Authentication and connection
-  useEffect(() => {
-    const handleAuth = async () => {
-      if (!user || isConnected) return;
-      
-      try {
-        const apiKey = await authenticate(user.id, user.email || user.id);
-        connect(apiKey, user.id, user.email || user.id);
-      } catch (error) {
-        console.error('Authentication failed:', error);
-      }
-    };
-
-    handleAuth();
-  }, [user, isConnected, authenticate, connect]);
 
   // Get rooms when connected
   useEffect(() => {
@@ -81,7 +63,7 @@ export function ConversationsPage() {
   useEffect(() => {
     if (selectedRoom) {
       joinRoom(selectedRoom);
-      getMessages(selectedRoom, 50, 0);
+      getMessages(selectedRoom);
     }
   }, [selectedRoom, joinRoom, getMessages]);
 

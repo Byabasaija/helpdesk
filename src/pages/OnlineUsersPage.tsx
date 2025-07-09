@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,32 +5,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
 import { Users, UserCheck, MessageSquare, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useAuth } from "@/hooks/useAuth";
 
 export function OnlineUsersPage() {
-  const { user } = useAuth();
   const {
     isConnected,
     onlineUsers,
-    connect,
-    authenticate
   } = useSocket();
-
-  useEffect(() => {
-    // Auto-connect using authentication flow
-    const handleAuth = async () => {
-      if (!user || isConnected) return;
-      
-      try {
-        const apiKey = await authenticate(user.email || user.id, user.email || user.id);
-        connect(apiKey, user.email || user.id, user.email || user.id);
-      } catch (error) {
-        console.error('Authentication failed:', error);
-      }
-    };
-
-    handleAuth();
-  }, [user, isConnected, authenticate, connect]);
 
   const handleRefresh = () => {
     // In the new API, online users are pushed automatically

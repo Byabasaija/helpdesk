@@ -1,4 +1,4 @@
-import { useState, useEffect, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,6 @@ export function ChatInterface(): JSX.Element {
   const { 
     isConnected, 
     isConnecting, 
-    connect, 
     disconnect, 
     messages, 
     rooms,
@@ -20,28 +19,11 @@ export function ChatInterface(): JSX.Element {
     sendMessage,
     getMessages,
     getRooms,
-    joinRoom,
-    authenticate
+    joinRoom
   } = useSocket();
   
   const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [messageContent, setMessageContent] = useState<string>('');
-
-  // Auto-authenticate and connect on mount
-  useEffect(() => {
-    const handleAuth = async () => {
-      if (!user || isConnected) return;
-      
-      try {
-        const apiKey = await authenticate(user.email || user.id, user.email || user.id);
-        connect(apiKey, user.email || user.id, user.email || user.id);
-      } catch (error) {
-        console.error('Authentication failed:', error);
-      }
-    };
-
-    handleAuth();
-  }, [user, isConnected, authenticate, connect]);
 
   const handleSendMessage = (): void => {
     if (!messageContent.trim() || !selectedRoom.trim()) {
